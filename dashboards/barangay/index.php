@@ -1,5 +1,6 @@
-ï»¿<?php
-
+﻿ï»¿<?php
+error_reporting(0);
+ini_set('display_errors', 0);
 require_once '../../config/auth_guard.php';
 
 require_role('barangay');
@@ -686,21 +687,16 @@ if ($r) while ($row = $r->fetch_assoc()) $families[] = $row;
 
 $zones_residents = [];
 
-$r = $conn->query("SELECT a.area_id, a.area_name, a.sort_order, COUNT(r.resident_id) as cnt FROM barangay_areas a LEFT JOIN residents r ON r.area_id = a.area_id AND r.is_active = 1 WHERE a.barangay_id = $bid AND a.is_active = 1 GROUP BY a.area_id ORDER BY a.sort_order ASC, a.area_name ASC");
-
-if ($r) while ($row = $r->fetch_assoc()) {
-    $zones_residents[$row['area_name']] = $row['cnt'];
-}
+$r = $conn->query("SELECT zone_number, COUNT(*) as cnt FROM residents WHERE barangay_id = $bid AND zone_number IS NOT NULL AND zone_number > 0 AND is_active = 1 GROUP BY zone_number ORDER BY zone_number ASC");
+if ($r) while ($row = $r->fetch_assoc()) $zones_residents[$row['zone_number']] = $row['cnt'];
 
 
 
 $zones_families = [];
 
-$r = $conn->query("SELECT a.area_id, a.area_name, a.sort_order, COUNT(f.family_id) as cnt FROM barangay_areas a LEFT JOIN families f ON f.area_id = a.area_id AND f.is_active = 1 WHERE a.barangay_id = $bid AND a.is_active = 1 GROUP BY a.area_id ORDER BY a.sort_order ASC, a.area_name ASC");
+$r = $conn->query("SELECT zone_number, COUNT(*) as cnt FROM families WHERE barangay_id = $bid AND zone_number IS NOT NULL AND zone_number > 0 GROUP BY zone_number ORDER BY zone_number ASC");
 
-if ($r) while ($row = $r->fetch_assoc()) {
-    $zones_families[$row['area_name']] = ['cnt' => $row['cnt'], 'area_id' => $row['area_id']];
-}
+if ($r) while ($row = $r->fetch_assoc()) $zones_families[$row['zone_number']] = $row['cnt'];
 
 
 
@@ -742,132 +738,6 @@ $r = $conn->query("SELECT user_id, full_name, email, role, created_at FROM users
 
 if ($r) $admin_info = $r->fetch_assoc();
 
-
-// -- Import Residents Logic --
-function ir_normalize_date($val) {
-    if (empty($val)) return null;
-    $val = trim($val);
-    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $val)) return $val;
-    $ts = strtotime($val);
-    if ($ts === false) return null;
-    return date('Y-m-d', $ts);
-}
-function ir_parse_zone($area) {
-    $area = trim($area);
-    if (empty($area)) return [0, ''];
-    if (preg_match('/^ZONE\s*(\d+)$/i', $area, $m)) return [(int)$m[1], $area];
-    return [0, $area];
-}
-$ir_message = ''; $ir_message_type = ''; $ir_preview_data = []; $ir_import_done = false; $ir_import_stats = [];
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ir_action'])) {
-    if ($_POST['ir_action'] === 'preview') {
-        $hhid_file = $_FILES['hhid_csv'] ?? null;
-        $hhmem_file = $_FILES['hhmem_csv'] ?? null;
-        if (!$hhid_file || $hhid_file['error'] !== UPLOAD_ERR_OK) {
-            $ir_message = 'Please upload the HHID CSV file.'; $ir_message_type = 'error';
-        } else {
-            $hhid_rows = [];
-            if (($fh = fopen($hhid_file['tmp_name'], 'r')) !== false) {
-                $hdrs = array_map('trim', fgetcsv($fh));
-                while (($row = fgetcsv($fh)) !== false) {
-                    if (count($row) < 2) continue;
-                    $hhid_rows[] = array_combine(array_map('strtoupper', $hdrs), array_pad($row, count($hdrs), ''));
-                }
-                fclose($fh);
-            }
-            $hhmem_rows = [];
-            if ($hhmem_file && $hhmem_file['error'] === UPLOAD_ERR_OK) {
-                if (($fh = fopen($hhmem_file['tmp_name'], 'r')) !== false) {
-                    $hdrs = array_map('trim', fgetcsv($fh));
-                    while (($row = fgetcsv($fh)) !== false) {
-                        if (count($row) < 2) continue;
-                        $hhmem_rows[] = array_combine(array_map('strtoupper', $hdrs), array_pad($row, count($hdrs), ''));
-                    }
-                    fclose($fh);
-                }
-            }
-            $fk_col = null;
-            if (!empty($hhmem_rows)) {
-                $hhmem_cols = array_keys($hhmem_rows[0]);
-                foreach (['ID','HHIDID','HHID_ID','HHID','HH_ID'] as $c) { if (in_array($c, $hhmem_cols)) { $fk_col = $c; break; } }
-            }
-            foreach (array_slice($hhid_rows, 0, 10) as $hh) {
-                $hhid = $hh['ID'] ?? '';
-                $name = trim(implode(' ', array_filter([$hh['FIRSTNAME']??'',$hh['MIDNAME']??'',$hh['LASTNAME']??'',$hh['SUFFIXNAME']??''])));
-                [,$zone_name] = ir_parse_zone($hh['AREA'] ?? '');
-                $members = [];
-                if ($fk_col) foreach ($hhmem_rows as $mem) { if (rtrim($mem[$fk_col]??'','.0')==rtrim($hhid,'.0')) $members[] = trim(implode(' ', array_filter([$mem['FIRSTNAME']??'',$mem['MIDNAME']??'',$mem['LASTNAME']??'',$mem['SUFFIXNAME']??'']))); }
-                $ir_preview_data[] = ['name'=>$name,'zone'=>$zone_name?:'-','address'=>trim(implode(', ',array_filter([($hh['BLK']??'')?'Blk '.$hh['BLK']:'',($hh['LOT']??'')?'Lot '.$hh['LOT']:'',$hh['STREET']??'']))),'members'=>$members,'member_count'=>count($members)];
-            }
-            $_SESSION['import_hhid'] = $hhid_rows; $_SESSION['import_hhmem'] = $hhmem_rows; $_SESSION['import_fk'] = $fk_col;
-            $ir_message = 'Preview ready - showing first '.min(10,count($hhid_rows)).' of '.count($hhid_rows).' households.';
-            $ir_message_type = 'info';
-        }
-    }
-    if ($_POST['ir_action'] === 'import') {
-        $hhid_rows = $_SESSION['import_hhid'] ?? []; $hhmem_rows = $_SESSION['import_hhmem'] ?? []; $fk_col = $_SESSION['import_fk'] ?? null;
-        if (empty($hhid_rows)) { $ir_message = 'No data in session. Please preview again.'; $ir_message_type = 'error'; }
-        else {
-            $fi=0;$fs=0;$ri=0;$rs=0;
-            $conn->begin_transaction();
-            try {
-                $area_cache = [];
-                $get_area_id = function($zn) use ($conn,$bid,&$area_cache) {
-                    if (empty($zn)) return null;
-                    $key = strtoupper(trim($zn));
-                    if (isset($area_cache[$key])) return $area_cache[$key];
-                    $esc = $conn->real_escape_string($key);
-                    $r = $conn->query("SELECT area_id FROM barangay_areas WHERE barangay_id=$bid AND UPPER(area_name)='$esc' AND is_active=1");
-                    if ($r && $r->num_rows > 0) { $aid = $r->fetch_assoc()['area_id']; }
-                    else {
-                        if (preg_match('/^ZONE/i',$key)) $at='Zone'; elseif (preg_match('/PUROK/i',$key)) $at='Purok'; elseif (preg_match('/SITIO/i',$key)) $at='Sitio'; elseif (preg_match('/STREET/i',$key)) $at='Street'; else $at='Area';
-                        $mx_r=$conn->query("SELECT MAX(sort_order) as mx FROM barangay_areas WHERE barangay_id=$bid");
-                        $mx=($mx_r->fetch_assoc()['mx']??-1)+1;
-                        $orig=$conn->real_escape_string(trim($zn));
-                        $conn->query("INSERT INTO barangay_areas (barangay_id,area_name,area_type,sort_order) VALUES ($bid,'$orig','$at',$mx)");
-                        $aid=$conn->insert_id;
-                    }
-                    $area_cache[$key]=$aid; return $aid;
-                };
-                $conn->query("SET FOREIGN_KEY_CHECKS=0");
-                $conn->query("DELETE FROM residents WHERE barangay_id=$bid");
-                $conn->query("DELETE FROM families WHERE barangay_id=$bid");
-                $conn->query("SET FOREIGN_KEY_CHECKS=1");
-                foreach ($hhid_rows as $hh) {
-                    $hhid=$hh['ID']??'';
-                    $full=$conn->real_escape_string(trim(implode(' ',array_filter([$hh['FIRSTNAME']??'',$hh['MIDNAME']??'',$hh['LASTNAME']??'',$hh['SUFFIXNAME']??'']))));
-                    if (!$full){$fs++;continue;}
-                    [$zone,$znr]=ir_parse_zone($hh['AREA']??'');
-                    $aid=$get_area_id($znr); $zne=$conn->real_escape_string($znr);
-                    $contact=$conn->real_escape_string($hh['CONTACTNO']??'');
-                    $bday=ir_normalize_date($hh['BDAY']??''); $bsql=$bday?"'$bday'":'NULL';
-                    $addr=$conn->real_escape_string(implode(', ',array_filter([($hh['BLK']??'')?'Blk '.$hh['BLK']:'',($hh['LOT']??'')?'Lot '.$hh['LOT']:'',$hh['STREET']??''])));
-                    $gender=$conn->real_escape_string($hh['GENDER']??'');
-                    $conn->query("INSERT INTO families (barangay_id,head_name,zone_number,zone_name,area_id,address,member_count) VALUES ($bid,'$full',$zone,'$zne',".($aid??'NULL').",'$addr',0)");
-                    $fid=$conn->insert_id; if(!$fid){$fs++;continue;} $fi++;
-                    $conn->query("INSERT INTO residents (barangay_id,family_id,full_name,birth_date,contact_number,zone_number,zone_name,area_id,relationship,gender,is_active) VALUES ($bid,$fid,'$full',$bsql,'$contact',$zone,'$zne',".($aid??'NULL').",'Head','$gender',1)");
-                    if($conn->insert_id) $ri++;
-                    if($fk_col) foreach($hhmem_rows as $mem) {
-                        if(rtrim($mem[$fk_col]??'','.0')!=rtrim($hhid,'.0')) continue;
-                        $mf=$conn->real_escape_string(trim(implode(' ',array_filter([$mem['FIRSTNAME']??'',$mem['MIDNAME']??'',$mem['LASTNAME']??'',$mem['SUFFIXNAME']??'']))));
-                        if(!$mf){$rs++;continue;}
-                        $mb=ir_normalize_date($mem['BDAY']??$mem['BIRTHDATE']??''); $mbsql=$mb?"'$mb'":'NULL';
-                        $mc=$conn->real_escape_string($mem['CONTACTNO']??$mem['CONTACT']??'');
-                        $mr=$conn->real_escape_string($mem['RELATIONSHIP']??'');
-                        $mg=$conn->real_escape_string($mem['GENDER']??'');
-                        $conn->query("INSERT INTO residents (barangay_id,family_id,full_name,birth_date,contact_number,zone_number,zone_name,area_id,relationship,gender,is_active) VALUES ($bid,$fid,'$mf',$mbsql,'$mc',$zone,'$zne',".($aid??'NULL').",'$mr','$mg',1)");
-                        if($conn->insert_id) $ri++; else $rs++;
-                    }
-                    $conn->query("UPDATE families SET member_count=(SELECT COUNT(*) FROM residents WHERE family_id=$fid AND is_active=1) WHERE id=$fid");
-                }
-                $conn->commit();
-                unset($_SESSION['import_hhid'],$_SESSION['import_hhmem'],$_SESSION['import_fk']);
-                $ir_import_done=true; $ir_import_stats=['families_inserted'=>$fi,'families_skipped'=>$fs,'residents_inserted'=>$ri,'residents_skipped'=>$rs];
-                $ir_message='Import complete.'; $ir_message_type='success';
-            } catch(Exception $e) { $conn->rollback(); $ir_message='Import failed: '.$e->getMessage(); $ir_message_type='error'; }
-        }
-    }
-}
 ?>
 
 
@@ -879,9 +749,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ir_action'])) {
 <head>
 
 <meta charset="UTF-8">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -933,7 +800,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ir_action'])) {
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-body { font-family: 'DM Sans', sans-serif; background: var(--white); display: flex; width: 100%; min-height: 100vh; color: var(--text); font-size: 14px; line-height: 1.5; }
+body { font-family: 'DM Sans', sans-serif; background: var(--white); display: flex; min-height: 100vh; color: var(--text); font-size: 14px; line-height: 1.5; }
 
 
 
@@ -957,19 +824,19 @@ body { font-family: 'DM Sans', sans-serif; background: var(--white); display: fl
 
 .sidebar-logo h1 {
 
-    color: var(--navy); font-size: 16px; font-weight: 700;
+    color: var(--navy); font-size: 16px; font-weight: 600;
 
-    letter-spacing: 0.02em; text-transform: uppercase;
+    letter-spacing: 0.08em; text-transform: uppercase;
 
 }
 
 .sidebar-logo p { color: var(--muted); font-size: 11px; margin-top: 2px; font-weight: 400; }
 
-.sidebar-menu { padding: 12px 0; flex: 1; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
+.sidebar-menu { padding: 12px 0; flex: 1; overflow-y: auto; }
 
 .sidebar-menu::-webkit-scrollbar { width: 0; }
 
-.sidebar-menu .menu-section { padding: 16px 20px 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--border-2); }
+.menu-section { padding: 16px 20px 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--border-2); }
 
 .menu-item {
 
@@ -980,8 +847,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--white); display: fl
     transition: all 0.15s; cursor: pointer; background: none;
 
     border: none; width: 100%; text-align: left; font-family: 'DM Sans', sans-serif;
-
-    text-decoration: none; white-space: nowrap; overflow: hidden;
 
 }
 
@@ -1029,11 +894,11 @@ body { font-family: 'DM Sans', sans-serif; background: var(--white); display: fl
 
 /* Ã¢ââ¬Ã¢ââ¬ MAIN Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬ */
 
-.main { margin-left: 232px; flex: 1; width: calc(100% - 232px); display: flex; flex-direction: column; min-height: 100vh; overflow-x: hidden; }
+.main { margin-left: 232px; flex: 1; display: flex; flex-direction: column; }
 
 .topbar {
 
-    background: var(--white); padding: 0 28px; height: 64px;
+    background: var(--white); padding: 0 28px; height: 56px;
 
     display: flex; align-items: center; justify-content: space-between;
 
@@ -1045,7 +910,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--white); display: fl
 
 .topbar-date { color: var(--muted); font-size: 12px; }
 
-.topbar-right { display: flex; align-items: center; gap: 12px; height: 100%; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
 
 .brgy-chip {
 
@@ -1251,7 +1116,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--white); display: fl
 
 
 
-/* Ã¢ââ¬Ã¢ââ¬ SEARCH / FILTER Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬ */
+/* SEARCH / FILTER */
 
 .search-bar {
 
@@ -1577,10 +1442,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--white); display: fl
 
 #search-summary { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
 
-
-/* Page transition */
-body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
-@keyframes fadeIn { to { opacity: 1; } }
 </style>
 
 </head>
@@ -1592,50 +1453,128 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 <!-- Ã¢ââ¬Ã¢ââ¬ SIDEBAR Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬ -->
 
 <div class="sidebar">
+
 <div class="sidebar-logo">
+
     <div style="display:flex;align-items:center;justify-content:space-between">
+
         <div>
+
             <h1>SPAC</h1>
+
             <p>Barangay Portal</p>
+
         </div>
+
         <?php if (!empty($brgy_info['logo'])): ?>
+
             <img src="<?= htmlspecialchars($brgy_info['logo']) ?>" alt="Barangay Logo"
-                 style="width:80px;height:80px;min-width:80px;min-height:80px;border-radius:50%;object-fit:cover;object-position:center;border:2px solid var(--border);flex-shrink:0">
+
+                 style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid var(--border);flex-shrink:0">
+
         <?php else: ?>
-            <div style="width:80px;height:80px;min-width:80px;min-height:80px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;flex-shrink:0;border:2px solid var(--border)">
+
+            <div style="width:80px;height:80px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;border:2px solid var(--border)">
+
                 <?= strtoupper(substr($brgy_info['name'] ?? 'B', 0, 1)) ?>
+
             </div>
+
         <?php endif; ?>
+
     </div>
+
 </div>
+
     <div class="sidebar-menu">
+
         <div class="menu-section">Overview</div>
-        <button class="menu-item" onclick="showSection('dashboard', this)"><span class="menu-dot"></span> Dashboard</button>
+
+        <button class="menu-item active" onclick="showSection('dashboard', this)"><span class="menu-dot"></span> Dashboard</button>
+
         <button class="menu-item" onclick="showSection('profile', this)"><span class="menu-dot"></span> Barangay Profile</button>
+
+
+
         <div class="menu-section">People</div>
-        <button class="menu-item" onclick="showSection('officials', this)"><span class="menu-dot"></span> Officials &amp; Staff <span class="menu-badge"><?= $total_officials ?></span></button>
-        <button class="menu-item" onclick="showSection('zones', this)"><span class="menu-dot"></span> <?= htmlspecialchars($area_label) ?> Leaders <span class="menu-badge"><?= $total_zones ?></span></button>
-        <button class="menu-item" onclick="showSection('households', this)"><span class="menu-dot"></span> Households <span class="menu-badge"><?= number_format($total_families) ?></span></button>
-        <button class="menu-item" onclick="showSection('residents', this)"><span class="menu-dot"></span> Residents <span class="menu-badge"><?= number_format($total_residents) ?></span></button>
+
+        <button class="menu-item" onclick="showSection('officials', this)">
+
+            <span class="menu-dot"></span> Officials &amp; Staff
+
+            <span class="menu-badge"><?= $total_officials ?></span>
+
+        </button>
+
+        <button class="menu-item" onclick="showSection('zones', this)">
+
+            <span class="menu-dot"></span> <?= htmlspecialchars($area_label) ?> Leaders
+
+            <span class="menu-badge"><?= $total_zones ?></span>
+
+        </button>
+
+        <button class="menu-item" onclick="showSection('households', this)">
+
+            <span class="menu-dot"></span> Households
+
+            <span class="menu-badge"><?= number_format($total_families) ?></span>
+
+        </button>
+
+        <button class="menu-item" onclick="showSection('residents', this)">
+
+            <span class="menu-dot"></span> Residents
+
+            <span class="menu-badge"><?= number_format($total_residents) ?></span>
+
+        </button>
+
+
+
         <div class="menu-section">Reports</div>
-        <button class="menu-item" onclick="showSection('statistics', this)"><span class="menu-dot"></span> Statistics</button>
+
+        <button class="menu-item" onclick="window.location.href='statistics.php'"><span class="menu-dot"></span> Statistics</button>
+
+
+
         <div class="menu-section">Services</div>
-        <button class="menu-item" onclick="showSection('manage_areas', this)"><span class="menu-dot"></span> Manage Areas</button>
-        <button class="menu-item" onclick="showSection('import_residents', this)"><span class="menu-dot"></span> Import Residents</button>
+
+        <button class="menu-item" onclick="window.location.href='import_residents.php'"><span class="menu-dot"></span> Import Residents</button>
+
         <button class="menu-item" onclick="showSection('ayuda', this)"><span class="menu-dot"></span> Ayuda / Assistance</button>
+
         <button class="menu-item" onclick="showSection('qr', this)"><span class="menu-dot"></span> Scan QR / History</button>
+
+
+
         <div class="menu-section">Management</div>
+
         <button class="menu-item" onclick="showSection('alerts', this)">
+
             <span class="menu-dot"></span> Alerts
+
             <?php if ($active_alerts > 0): ?>
+
             <span class="menu-badge alert"><?= $active_alerts ?></span>
+
             <?php endif; ?>
-        </a>
+
+        </button>
+
     </div>
+
     <div class="sidebar-footer">
-        <a href="../../logout.php"><span class="menu-dot"></span> Logout</a>
+
+        <a href="<?= str_repeat('../', 2) ?>logout.php"><span class="menu-dot"></span> Logout</a>
+
     </div>
+
 </div>
+
+
+
+<!-- Ã¢ââ¬Ã¢ââ¬ MAIN Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬ -->
 
 <div class="main">
 
@@ -1683,8 +1622,9 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
         <!-- Ã¢â¢ÂÃ¢â¢Â DASHBOARD Ã¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢Â -->
 
+        <?php $active_section = isset($_GET['msg']) && 'dashboard'; ?>
 
-        <div id="section-dashboard" class="section">
+        <div id="section-dashboard" class="section <?= $active_section === 'dashboard' ? 'active' : '' ?>">
 
             <div class="page-header">
 
@@ -1886,7 +1826,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
         <?php if (!empty($brgy_info['logo'])): ?>
 
-            <img src="<?= $brgy_info['logo'] ?>" alt="Logo"
+            <img src="<?= htmlspecialchars($brgy_info['logo']) ?>" alt="Logo"
 
                  style="width:52px;height:52px;border-radius:8px;object-fit:cover;border:2px solid rgba(255,255,255,0.2)">
 
@@ -1942,7 +1882,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
         <!-- Ã¢â¢ÂÃ¢â¢Â OFFICIALS Ã¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢Â -->
 
-        <div id="section-officials" class="section">
+        <div id="section-officials" class="section <?= $active_section === 'officials' ? 'active' : '' ?>">
 
                         <!-- ORG CHART -->
 
@@ -2184,11 +2124,11 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
                         <div style="display:flex;gap:6px;margin-top:10px">
 
-                            <button onclick="openEditZone(<?= $zl['zone_leader_id'] ?>, '<?= htmlspecialchars($zl['zone_name'] ?? '', ENT_QUOTES) ?>', '<?= htmlspecialchars($zl['leader_name'], ENT_QUOTES) ?>', '<?= htmlspecialchars($zl['contact_number'] ?? '', ENT_QUOTES) ?>')" class="btn btn-ghost btn-sm" style="flex:1">Edit</button>
+                            <button onclick="openEditZone(<?= $zl['id'] ?>, '<?= htmlspecialchars($zl['zone_name'] ?? '', ENT_QUOTES) ?>', '<?= htmlspecialchars($zl['leader_name'], ENT_QUOTES) ?>', '<?= htmlspecialchars($zl['contact_number'] ?? '', ENT_QUOTES) ?>')" class="btn btn-ghost btn-sm" style="flex:1">Edit</button>
 
                             <form method="POST" onsubmit="return confirm('Remove?')" style="flex:1">
 
-                                <input type="hidden" name="zone_leader_id" value="<?= $zl['zone_leader_id'] ?>">
+                                <input type="hidden" name="zone_leader_id" value="<?= $zl['id'] ?>">
 
                                 <button name="delete_zone_leader" class="btn btn-danger btn-sm" style="width:100%">Delete</button>
 
@@ -2226,13 +2166,17 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
                     <option value="">All <?= htmlspecialchars($area_label_plural) ?></option>
 
-                    <?php
-                    $r_areas = $conn->query("SELECT area_id, area_name FROM barangay_areas WHERE barangay_id=$bid AND is_active=1 ORDER BY sort_order ASC, area_name ASC");
-                    if ($r_areas) while ($ar = $r_areas->fetch_assoc()): ?>
+                    <?php foreach ($zone_leaders as $zl):
 
-                    <option value="<?= $ar['area_id'] ?>"><?= htmlspecialchars($ar['area_name']) ?></option>
+                        $isNumbered = in_array($area_label, ['Zone','Purok','Block']);
 
-                    <?php endwhile; ?>
+                        $optLabel = $isNumbered ? $area_label . ' ' . $zl['zone_number'] : ($zl['zone_name'] ?: $area_label . ' ' . $zl['zone_number']);
+
+                    ?>
+
+                    <option value="<?= $zl['zone_number'] ?>"><?= htmlspecialchars($optLabel) ?></option>
+
+                    <?php endforeach; ?>
 
                 </select>
 
@@ -2246,13 +2190,13 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:14px">
 
-                <?php foreach ($zones_families as $zn => $zdata): ?>
+                <?php foreach ($zones_families as $zn => $cnt): ?>
 
                 <div class="stat-card">
 
-                    <div class="stat-num"><?= $zdata['cnt'] ?></div>
+                    <div class="stat-num"><?= $cnt ?></div>
 
-                    <div class="stat-label"><?= htmlspecialchars($zn) ?> Families</div>
+                    <div class="stat-label"><?= htmlspecialchars($area_label) ?> <?= $zn ?> Families</div>
 
                 </div>
 
@@ -2294,7 +2238,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
                     <?php foreach ($families as $fam): ?>
 
-                    <tr data-zone="<?= $fam['area_id'] ?>"
+                    <tr data-zone="<?= $fam['zone_number'] ?>"
 
                         data-name="<?= strtolower(htmlspecialchars($fam['head_name'] ?? '')) ?>"
 
@@ -2302,7 +2246,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
                         <td style="font-weight:500"><?= htmlspecialchars($fam['family_name'] ?? $fam['head_name'] ?? '—') ?></td>
 
-                        <td><?= htmlspecialchars($fam['zone_name'] ?: ($fam['zone_number'] ? $area_label . ' ' . $fam['zone_number'] : '—')) ?></td>
+                        <td><?= $fam['zone_number'] ? htmlspecialchars($area_label) . ' ' . $fam['zone_number'] : '—' ?></td>
 
                         <td style="color:var(--muted)"><?= htmlspecialchars($fam['address'] ?? '—') ?></td>
 
@@ -2342,7 +2286,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
                     <div class="stat-num"><?= $cnt ?></div>
 
-                    <div class="stat-label"><?= htmlspecialchars($zn) ?></div>
+                    <div class="stat-label"><?= htmlspecialchars($area_label) ?> <?= $zn ?></div>
 
                 </div>
 
@@ -2380,7 +2324,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
                         <td style="font-weight:500"><?= htmlspecialchars($res['full_name'] ?? '—') ?></td>
 
-                        <td><?= htmlspecialchars($res['zone_name'] ?: ($res['zone_number'] ? $area_label . ' ' . $res['zone_number'] : '—')) ?></td>
+                        <td><?= $res['zone_number'] ? htmlspecialchars($area_label) . ' ' . $res['zone_number'] : '—' ?></td>
 
                         <td style="color:var(--muted)"><?= htmlspecialchars($res['birth_date'] ?? '—') ?></td>
 
@@ -2404,97 +2348,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
         
 
-        
-        <!-- IMPORT RESIDENTS SECTION -->
-        <div id="section-import_residents" class="section">
-            <div class="page-header">
-                <h2>Import from Access Database</h2>
-                <p>Upload CSV exports from your .accdb file to populate households and residents.</p>
-            </div>
-
-            <?php if ($ir_message): ?>
-            <div class="alert-banner <?= $ir_message_type ?>">
-                <?= htmlspecialchars($ir_message) ?>
-            </div>
-            <?php endif; ?>
-
-            <?php if ($ir_import_done): ?>
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">
-                <div class="stat-card"><div class="stat-num"><?= number_format($ir_import_stats['families_inserted']) ?></div><div class="stat-label">Families Added</div></div>
-                <div class="stat-card"><div class="stat-num"><?= number_format($ir_import_stats['residents_inserted']) ?></div><div class="stat-label">Residents Added</div></div>
-                <div class="stat-card"><div class="stat-num"><?= number_format($ir_import_stats['families_skipped']) ?></div><div class="stat-label">Families Skipped</div></div>
-                <div class="stat-card"><div class="stat-num"><?= number_format($ir_import_stats['residents_skipped']) ?></div><div class="stat-label">Residents Skipped</div></div>
-            </div>
-            <div style="display:flex;gap:10px">
-                <a href="index.php?section=households" class="btn btn-primary">View Households</a>
-                <a href="index.php?section=import_residents" class="btn btn-secondary">Import Again</a>
-            </div>
-
-            <?php else: ?>
-
-            <div style="display:flex;gap:0;margin-bottom:24px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
-                <div style="flex:1;padding:14px 20px;font-size:12px;font-weight:500;background:<?= empty($ir_preview_data)?'#fff':'var(--surface-2)' ?>;color:<?= empty($ir_preview_data)?'var(--navy)':'var(--muted)' ?>;border-right:1px solid var(--border);display:flex;align-items:center;gap:10px">
-                    <span style="font-size:11px;font-weight:700;background:<?= empty($ir_preview_data)?'var(--navy)':'var(--border)' ?>;color:<?= empty($ir_preview_data)?'#fff':'var(--muted)' ?>;border-radius:20px;padding:2px 8px;font-family:monospace">01</span> Upload &amp; Preview
-                </div>
-                <div style="flex:1;padding:14px 20px;font-size:12px;font-weight:500;background:<?= !empty($ir_preview_data)?'#fff':'var(--surface-2)' ?>;color:<?= !empty($ir_preview_data)?'var(--navy)':'var(--muted)' ?>;border-right:1px solid var(--border);display:flex;align-items:center;gap:10px">
-                    <span style="font-size:11px;font-weight:700;background:<?= !empty($ir_preview_data)?'var(--navy)':'var(--border)' ?>;color:<?= !empty($ir_preview_data)?'#fff':'var(--muted)' ?>;border-radius:20px;padding:2px 8px;font-family:monospace">02</span> Confirm Import
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header"><div><div class="card-title">Upload CSV Files</div><div class="card-sub">HHID is required; HHMEM is optional for household members</div></div></div>
-                <form method="POST" enctype="multipart/form-data" style="margin-top:10px">
-                    <input type="hidden" name="ir_action" value="preview">
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px">
-                        <div>
-                            <label style="display:block;font-size:12px;font-weight:500;color:var(--navy);margin-bottom:8px">HHID.csv — Household Heads <span style="color:#dc2626">*</span></label>
-                            <div style="border:2px dashed var(--border);border-radius:10px;padding:24px 20px;text-align:center;position:relative;background:#fafafa">
-                                <input type="file" name="hhid_csv" accept=".csv,.txt" required style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="document.getElementById('ir-name-hhid').textContent=this.files[0]?this.files[0].name:''">
-                                <div style="font-size:13px;color:var(--muted);pointer-events:none"><strong style="color:var(--navy)">Choose file</strong> or drag here<br><span id="ir-name-hhid" style="font-size:12px;color:#16a34a;font-family:monospace"></span></div>
-                            </div>
-                        </div>
-                        <div>
-                            <label style="display:block;font-size:12px;font-weight:500;color:var(--navy);margin-bottom:8px">HHMEM.csv — Members <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-                            <div style="border:2px dashed var(--border);border-radius:10px;padding:24px 20px;text-align:center;position:relative;background:#fafafa">
-                                <input type="file" name="hhmem_csv" accept=".csv,.txt" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="document.getElementById('ir-name-hhmem').textContent=this.files[0]?this.files[0].name:''">
-                                <div style="font-size:13px;color:var(--muted);pointer-events:none"><strong style="color:var(--navy)">Choose file</strong> or drag here<br><span id="ir-name-hhmem" style="font-size:12px;color:#16a34a;font-family:monospace"></span></div>
-                            </div>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Preview Import</button>
-                </form>
-            </div>
-
-            <?php if (!empty($ir_preview_data)): ?>
-            <div class="card">
-                <div class="card-header"><div><div class="card-title">Preview (first 10 households)</div><div class="card-sub">Review before confirming</div></div></div>
-                <table class="data-table">
-                    <thead><tr><th>Head of Family</th><th>Area</th><th>Address</th><th>Members</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($ir_preview_data as $row): ?>
-                    <tr>
-                        <td style="font-weight:500"><?= htmlspecialchars($row['name']) ?></td>
-                        <td><?= htmlspecialchars($row['zone']) ?></td>
-                        <td style="color:var(--muted)"><?= htmlspecialchars($row['address']?:'-') ?></td>
-                        <td><?php if(empty($row['members'])): ?><span class="tag tag-muted">Head only</span><?php else: ?><span class="tag tag-navy"><?= $row['member_count'] ?> member<?= $row['member_count']!=1?'s':'' ?></span><?php endif; ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">
-                    <form method="POST">
-                        <input type="hidden" name="ir_action" value="import">
-                        <button type="submit" class="btn btn-primary" onclick="return confirm('This will replace all existing data. Continue?')">Confirm and Import All</button>
-                    </form>
-                    <a href="index.php?section=import_residents" class="btn btn-secondary">Cancel</a>
-                </div>
-            </div>
-            <?php endif; ?>
-            <?php endif; ?>
-        </div>
-
-
-<!-- Ã¢â¢ÂÃ¢â¢Â AYUDA Ã¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢Â -->
+        <!-- Ã¢â¢ÂÃ¢â¢Â AYUDA Ã¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢ÂÃ¢â¢Â -->
 
 <div id="section-ayuda" class="section">
 
@@ -2726,138 +2580,11 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
         </div>
 
+
+
+    </div>
+
 </div>
-
-
-
-        <!-- STATISTICS SECTION -->
-        <div id="section-statistics" class="section">
-            <div class="page-header">
-                <h2>Household Monitoring Statistical Report</h2>
-                <p>Generated <?= date('F j, Y') ?></p>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px">
-                <div class="stat-card"><div class="stat-num"><?= number_format($total_families) ?></div><div class="stat-label">Total Household Heads</div></div>
-                <div class="stat-card"><div class="stat-num"><?= number_format($total_residents) ?></div><div class="stat-label">Total Family Members</div></div>
-            </div>
-            <?php if (!empty($zones_residents)): ?>
-            <div class="card" style="margin-bottom:14px">
-                <div class="card-header"><div class="card-title">Residents by <?= htmlspecialchars($area_label) ?></div></div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">
-                    <?php foreach ($zones_residents as $zn => $cnt): ?>
-                    <div class="stat-card"><div class="stat-num"><?= number_format($cnt) ?></div><div class="stat-label"><?= htmlspecialchars($area_label) ?> <?= $zn ?></div></div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            <?php endif; ?>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-                <div class="card">
-                    <div class="card-header"><div class="card-title">Population by Age Bracket</div></div>
-                    <?php
-                    $stat_brackets = [["00-04",0,4],["05-09",5,9],["10-14",10,14],["15-19",15,19],["20-24",20,24],["25-29",25,29],["30-34",30,34],["35-39",35,39],["40-44",40,44],["45-49",45,49],["50-54",50,54],["55-59",55,59],["60-64",60,64],["65+",65,999]];
-                    ?>
-                    <table class="data-table">
-                        <thead><tr><th>Age Group</th><th style="text-align:right">Count</th></tr></thead>
-                        <tbody>
-                        <?php foreach ($stat_brackets as [$lbl,$mn,$mx]):
-                            $mxs = $mx===999?"999":$mx;
-                            $ar = $conn->query("SELECT COUNT(*) as c FROM residents WHERE barangay_id=$bid AND is_active=1 AND birth_date IS NOT NULL AND TIMESTAMPDIFF(YEAR,birth_date,CURDATE()) BETWEEN $mn AND $mxs");
-                            $ca = $ar?(int)$ar->fetch_assoc()["c"]:0;
-                        ?>
-                        <tr><td><?= $lbl ?></td><td style="text-align:right;font-family:monospace"><?= number_format($ca) ?></td></tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="card">
-                    <div class="card-header"><div class="card-title">Population by Sector</div></div>
-                    <?php
-                    $sc_r=$conn->query("SELECT COUNT(*) as c FROM residents WHERE barangay_id=$bid AND is_active=1 AND birth_date IS NOT NULL AND TIMESTAMPDIFF(YEAR,birth_date,CURDATE())>=60");
-                    $sc_c=$sc_r?(int)$sc_r->fetch_assoc()["c"]:0;
-                    $yu_r=$conn->query("SELECT COUNT(*) as c FROM residents WHERE barangay_id=$bid AND is_active=1 AND birth_date IS NOT NULL AND TIMESTAMPDIFF(YEAR,birth_date,CURDATE()) BETWEEN 15 AND 24");
-                    $yu_c=$yu_r?(int)$yu_r->fetch_assoc()["c"]:0;
-                    $ch_r=$conn->query("SELECT COUNT(*) as c FROM residents WHERE barangay_id=$bid AND is_active=1 AND birth_date IS NOT NULL AND TIMESTAMPDIFF(YEAR,birth_date,CURDATE())<18");
-                    $ch_c=$ch_r?(int)$ch_r->fetch_assoc()["c"]:0;
-                    ?>
-                    <table class="data-table">
-                        <thead><tr><th>Sector</th><th style="text-align:right">Count</th></tr></thead>
-                        <tbody>
-                        <tr><td>Senior Citizens (60+)</td><td style="text-align:right;font-family:monospace"><?= number_format($sc_c) ?></td></tr>
-                        <tr><td>Youth (15-24)</td><td style="text-align:right;font-family:monospace"><?= number_format($yu_c) ?></td></tr>
-                        <tr><td>Children (under 18)</td><td style="text-align:right;font-family:monospace"><?= number_format($ch_c) ?></td></tr>
-                        <tr><td style="font-weight:600">Total Residents</td><td style="text-align:right;font-family:monospace;font-weight:600"><?= number_format($total_residents) ?></td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- MANAGE AREAS SECTION -->
-        <div id="section-manage_areas" class="section">
-            <div class="page-header">
-                <h2>Manage Areas</h2>
-                <p>Configure <?= htmlspecialchars($area_label) ?> areas for <?= htmlspecialchars($brgy_info["name"] ?? "") ?></p>
-            </div>
-            <?php
-            $ma_areas = [];
-            $ma_r = $conn->query("SELECT a.*, (SELECT COUNT(*) FROM residents r WHERE r.area_id=a.area_id AND r.is_active=1) as rc, (SELECT COUNT(*) FROM families f WHERE f.area_id=a.area_id) as fc FROM barangay_areas a WHERE a.barangay_id=$bid AND a.is_active=1 ORDER BY a.sort_order, a.area_name");
-            if ($ma_r) while ($row=$ma_r->fetch_assoc()) $ma_areas[] = $row;
-            ?>
-            <div class="card">
-                <div class="card-header"><div><div class="card-title">Area Label</div><div class="card-sub">e.g. Zone, Purok, Street</div></div></div>
-                <form method="POST" action="manage_areas.php" style="margin-top:10px">
-                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                        <input type="text" name="area_label" value="<?= htmlspecialchars($area_label) ?>" class="search-input" style="max-width:260px">
-                        <button type="submit" name="update_label" class="btn btn-primary">Update Label</button>
-                    </div>
-                </form>
-            </div>
-            <div class="card">
-                <div class="card-header"><div class="card-title">Add New Area</div></div>
-                <form method="POST" action="manage_areas.php" style="margin-top:10px">
-                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                        <input type="text" name="area_name" placeholder="e.g. Zone 1, Purok 3" required class="search-input">
-                        <select name="area_type" class="filter-select">
-                            <?php foreach(["Zone","Compound","Subdivision","Street","Purok","Sitio","Block","Area"] as $t): ?>
-                            <option value="<?= $t ?>"><?= $t ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <button type="submit" name="add_area" class="btn btn-primary">+ Add Area</button>
-                    </div>
-                </form>
-            </div>
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">All Areas (<?= count($ma_areas) ?>)</div>
-                    <a href="manage_areas.php" class="btn btn-ghost btn-sm">Full Page</a>
-                </div>
-                <?php if (empty($ma_areas)): ?>
-                <div class="card-empty">No areas yet. Add one above.</div>
-                <?php else: ?>
-                <table class="data-table">
-                    <thead><tr><th>Area Name</th><th>Type</th><th>Residents</th><th>Families</th><th></th></tr></thead>
-                    <tbody>
-                    <?php foreach ($ma_areas as $a): ?>
-                    <tr>
-                        <td style="font-weight:500"><?= htmlspecialchars($a["area_name"]) ?></td>
-                        <td><span class="tag tag-navy"><?= htmlspecialchars($a["area_type"]) ?></span></td>
-                        <td style="font-family:monospace"><?= number_format($a["rc"]) ?></td>
-                        <td style="font-family:monospace"><?= number_format($a["fc"]) ?></td>
-                        <td>
-                            <form method="POST" action="manage_areas.php" style="display:inline" onsubmit="return confirm('Delete this area?')">
-                                <input type="hidden" name="area_id" value="<?= $a["area_id"] ?>">
-                                <button type="submit" name="delete_area" class="btn btn-danger btn-sm">Delete</button>
-                            </form>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <?php endif; ?>
-            </div>
-        </div>
-
-
 
 
 
@@ -2877,7 +2604,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
     <div class="modal">
 
-        <div class="modal-header"><h3>Add Assistance</h3><button class="modal-close" onclick="closeModal('modal-add-assistance')">&times;</button></div>
+        <div class="modal-header"><h3>Add Assistance</h3><button class="modal-close" onclick="closeModal('modal-add-assistance')">Ãâ</button></div>
 
        <form method="POST" enctype="multipart/form-data"><div class="modal-body">
 
@@ -2929,7 +2656,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
     <div class="modal">
 
-        <div class="modal-header"><h3>Edit Barangay Profile</h3><button class="modal-close" onclick="closeModal('modal-edit-profile')">&times;</button></div>
+        <div class="modal-header"><h3>Edit Barangay Profile</h3><button class="modal-close" onclick="closeModal('modal-edit-profile')">Ãâ</button></div>
 
          <form method="POST" enctype="multipart/form-data"><div class="modal-body">
 
@@ -2999,7 +2726,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
             <h3>Add Official</h3>
 
-            <button class="modal-close" onclick="closeModal('modal-add-official')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-add-official')">Ãâ</button>
 
         </div>
 
@@ -3077,7 +2804,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
     <div class="modal">
 
-        <div class="modal-header"><h3>Add <?= htmlspecialchars($area_label) ?> Leader</h3><button class="modal-close" onclick="closeModal('modal-add-zone')">&times;</button></div>
+        <div class="modal-header"><h3>Add <?= htmlspecialchars($area_label) ?> Leader</h3><button class="modal-close" onclick="closeModal('modal-add-zone')">Ãâ</button></div>
 
         <form method="POST"><div class="modal-body">
 
@@ -3115,7 +2842,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
     <div class="modal">
 
-        <div class="modal-header"><h3>Edit <?= htmlspecialchars($area_label) ?> Leader</h3><button class="modal-close" onclick="closeModal('modal-edit-zone')">&times;</button></div>
+        <div class="modal-header"><h3>Edit <?= htmlspecialchars($area_label) ?> Leader</h3><button class="modal-close" onclick="closeModal('modal-edit-zone')">Ãâ</button></div>
 
         <form method="POST"><div class="modal-body">
 
@@ -3155,7 +2882,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
     <div class="modal">
 
-        <div class="modal-header"><h3 id="zone-detail-title">Area Details</h3><button class="modal-close" onclick="closeModal('modal-zone-detail')">&times;</button></div>
+        <div class="modal-header"><h3 id="zone-detail-title">Area Details</h3><button class="modal-close" onclick="closeModal('modal-zone-detail')">Ãâ</button></div>
 
         <div class="modal-body" id="zone-detail-body"></div>
 
@@ -3171,7 +2898,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
     <div class="modal">
 
-        <div class="modal-header"><h3>Post Alert</h3><button class="modal-close" onclick="closeModal('modal-add-alert')">&times;</button></div>
+        <div class="modal-header"><h3>Post Alert</h3><button class="modal-close" onclick="closeModal('modal-add-alert')">Ãâ</button></div>
 
         <form method="POST"><div class="modal-body">
 
@@ -3221,7 +2948,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
             <h3 id="fdrill-title">Families by <?= htmlspecialchars($area_label) ?></h3>
 
-            <button class="modal-close" onclick="closeFamiliesDrill()">&times;</button>
+            <button class="modal-close" onclick="closeFamiliesDrill()">Ãâ</button>
 
         </div>
 
@@ -3235,13 +2962,21 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
                     <?php
 
-                    foreach ($zones_families as $zname => $zdata):
-                        $fcount = $zdata['cnt'];
+                    $all_zone_nums = array_unique(array_merge(array_keys($zones_families), array_keys($families_by_zone)));
+
+                    sort($all_zone_nums);
+
+                    foreach ($all_zone_nums as $zn):
+
+                        $fcount = count($families_by_zone[$zn] ?? []);
+
                     ?>
 
-                    <div onclick="showFamiliesInZone('<?= htmlspecialchars(addslashes($zname)) ?>')" class="zone-card" style="text-align:center">
+                    <div onclick="showFamiliesInZone(<?= $zn ?>)" class="zone-card" style="text-align:center">
 
-                        <div class="zone-num" style="font-size:13px"><?= htmlspecialchars($zname) ?></div>
+                        <div class="zone-num"><?= $zn ?></div>
+
+                        <div style="font-size:11px;color:var(--muted);margin-top:3px"><?= htmlspecialchars($area_label) ?> <?= $zn ?></div>
 
                         <div style="font-size:11px;color:var(--navy);font-weight:500;margin-top:2px"><?= $fcount ?> families</div>
 
@@ -3335,7 +3070,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
     <div class="modal">
 
-        <div class="modal-header"><h3>Add Family Member</h3><button class="modal-close" onclick="closeModal('modal-add-member')">&times;</button></div>
+        <div class="modal-header"><h3>Add Family Member</h3><button class="modal-close" onclick="closeModal('modal-add-member')">Ãâ</button></div>
 
         <form method="POST"><div class="modal-body">
 
@@ -3397,7 +3132,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
     <div class="modal">
 
-        <div class="modal-header"><h3>Edit Family</h3><button class="modal-close" onclick="closeModal('modal-edit-family')">&times;</button></div>
+        <div class="modal-header"><h3>Edit Family</h3><button class="modal-close" onclick="closeModal('modal-edit-family')">Ãâ</button></div>
 
         <form method="POST"><div class="modal-body">
 
@@ -3445,7 +3180,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
     <div class="modal">
 
-        <div class="modal-header"><h3>Edit Member</h3><button class="modal-close" onclick="closeModal('modal-edit-member')">&times;</button></div>
+        <div class="modal-header"><h3>Edit Member</h3><button class="modal-close" onclick="closeModal('modal-edit-member')">Ãâ</button></div>
 
         <form method="POST"><div class="modal-body">
 
@@ -3505,7 +3240,7 @@ body { opacity: 0; animation: fadeIn 0.15s ease forwards; }
 
     <div class="modal">
 
-        <div class="modal-header"><h3>QR Scanner</h3><button class="modal-close" onclick="closeModal('modal-qr-scan')">&times;</button></div>
+        <div class="modal-header"><h3>QR Scanner</h3><button class="modal-close" onclick="closeModal('modal-qr-scan')">Ãâ</button></div>
 
         <div class="modal-body" style="text-align:center;padding:40px 22px">
 
@@ -3549,7 +3284,6 @@ var sectionTitles = {
 
     households: 'Households', residents: 'Residents',
 
-    statistics: 'Statistics', manage_areas: 'Manage Areas', import_residents: 'Import Residents',
     ayuda: 'Ayuda / Assistance', qr: 'Scan QR / History', alerts: 'Alerts'
 
 };
@@ -3561,12 +3295,8 @@ function showSection(id, btn) {
     localStorage.setItem('activeSection', id);
 
     document.querySelectorAll('.section').forEach(function(s){ s.classList.remove('active'); });
-    var target = document.getElementById('section-' + id);
-    if (target) target.classList.add('active');
-    window.scrollTo(0, 0);
-    var url = new URL(window.location.href);
-    url.searchParams.set('section', id);
-    window.history.replaceState({}, '', url.toString());
+
+    document.getElementById('section-' + id).classList.add('active');
 
     document.querySelectorAll('.menu-item').forEach(function(l){ l.classList.remove('active'); });
 
@@ -3836,7 +3566,7 @@ function showFamilyMembers(familyId, headName) {
 
                         '<input type="hidden" name="delete_member" value="1"><input type="hidden" name="resident_id" value="' + m.resident_id + '"><input type="hidden" name="family_id" value="' + familyId + '">' +
 
-                        '<button type="submit" class="btn btn-danger btn-sm">&times;</button></form></td></tr>';
+                        '<button type="submit" class="btn btn-danger btn-sm">Ãâ</button></form></td></tr>';
 
                 });
 
@@ -3960,17 +3690,15 @@ function escHtml(str) {
 
 
 
-document.addEventListener('DOMContentLoaded', function() {
-    var urlParams = new URLSearchParams(window.location.search);
-    var fromUrl = urlParams.get('section');
-    var saved = fromUrl || localStorage.getItem('activeSection') || 'dashboard';
+(function() {
+
+    var saved = localStorage.getItem('activeSection') || 'dashboard';
+
     var menuBtn = document.querySelector('.menu-item[onclick*="' + saved + '"]');
-    if (!menuBtn) {
-        saved = 'dashboard';
-        menuBtn = document.querySelector('.menu-item[onclick*="dashboard"]');
-    }
+
     showSection(saved, menuBtn);
-});
+
+})();
 
 
 
@@ -4120,22 +3848,6 @@ function handleLogoUpload(input) {
 
 
 
-
-function showLoadingAndGo(url, btn) {
-    document.querySelectorAll('.menu-item').forEach(function(l){ l.classList.remove('active'); });
-    if (btn) btn.classList.add('active');
-    var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(255,255,255,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
-    overlay.innerHTML = '<div style="text-align:center"><div style="width:24px;height:24px;border:2px solid #e2e8f0;border-top-color:#0f172a;border-radius:50%;animation:spin 0.6s linear infinite;margin:0 auto"></div><div style="font-size:12px;color:#64748b;margin-top:8px">Loading...</div></div>';
-    if (!document.getElementById('spin-style')) {
-        var s = document.createElement('style');
-        s.id = 'spin-style';
-        s.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
-        document.head.appendChild(s);
-    }
-    document.body.appendChild(overlay);
-    window.location.href = url;
-}
 </script>
 
 
@@ -4150,7 +3862,7 @@ function showLoadingAndGo(url, btn) {
 
             <h3>My Profile</h3>
 
-            <button class="modal-close" onclick="closeModal('modal-profile')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-profile')">Ãâ</button>
 
         </div>
 
@@ -4218,7 +3930,7 @@ function showLoadingAndGo(url, btn) {
 
             <h3>Edit Account</h3>
 
-            <button class="modal-close" onclick="closeModal('modal-edit-account')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-edit-account')">Ãâ</button>
 
         </div>
 
@@ -4282,7 +3994,7 @@ function showLoadingAndGo(url, btn) {
 
     <div class="modal">
 
-        <div class="modal-header"><h3>Edit Official</h3><button class="modal-close" onclick="closeModal('modal-edit-official')">&times;</button></div>
+        <div class="modal-header"><h3>Edit Official</h3><button class="modal-close" onclick="closeModal('modal-edit-official')">Ãâ</button></div>
 
        <form method="POST" enctype="multipart/form-data"><div class="modal-body">
 
