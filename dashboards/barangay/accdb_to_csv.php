@@ -56,7 +56,7 @@ if ($accdb_exists && $odbc_ok) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Export from Access – SPAC</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <style>
 :root {
     --white:      #ffffff;
@@ -177,7 +177,7 @@ code {
     background: var(--border); padding: 1px 5px; border-radius: 3px; color: var(--navy);
 }
 </style>
-</head>
+<link rel="stylesheet" href="/SPAC/assets/fonts/fonts.css"></head>
 <body>
 
 <div class="sidebar">

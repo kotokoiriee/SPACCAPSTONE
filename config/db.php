@@ -18,8 +18,8 @@ $conn->set_charset("utf8mb4");
 $conn->query("SET time_zone = '+8:00'");
 
 // Prevent "MySQL server has gone away"
-$conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 30);
+$conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
 $conn->query("SET SESSION wait_timeout=600");
 $conn->query("SET SESSION interactive_timeout=600");
-$conn->ping();
+
 ?>

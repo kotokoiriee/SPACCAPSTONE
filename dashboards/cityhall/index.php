@@ -13,7 +13,7 @@ require_role('cityhall');
         p { color: #7a9cc6; }
         a { color: #4a9eff; }
     </style>
-</head>
+<link rel="stylesheet" href="/SPAC/assets/fonts/fonts.css"></head>
 <body>
 <div class="box">
     <h1>👋 Welcome, <?= htmlspecialchars($_SESSION['full_name']) ?></h1>

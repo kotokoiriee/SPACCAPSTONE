@@ -213,7 +213,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SPAC – Social Protection Assistance Card | San Pedro, Laguna</title>
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  
+
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -514,7 +516,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .fp-success-title { font-family:'Sora',sans-serif; font-weight:800; font-size:1.2rem; color:#16a34a; text-align:center; margin-bottom:8px; }
     .fp-success-sub { color:var(--muted); font-size:.88rem; text-align:center; margin-bottom:22px; }
   </style>
-</head>
+<link rel="stylesheet" href="/SPAC/assets/fonts/fonts.css"></head>
 <body>
 
 <!-- ─── NAVBAR ─── -->

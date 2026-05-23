@@ -122,7 +122,7 @@ if ($r) while ($row = $r->fetch_assoc()) $zone_data[] = $row;
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Statistics – SPAC</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <?php include __DIR__.'/shared_style.css.php'; ?>
 <style>
 .summary-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; margin-bottom:24px; }
@@ -146,7 +146,7 @@ if ($r) while ($row = $r->fetch_assoc()) $zone_data[] = $row;
 @media print { .sidebar,.topbar { display:none!important; } .main { margin-left:0!important; } body { background:#fff; } }
 </style>
 
-</head>
+<link rel="stylesheet" href="/SPAC/assets/fonts/fonts.css"></head>
 <body>
 
 <?php include 'shared_sidebar.php'; ?>

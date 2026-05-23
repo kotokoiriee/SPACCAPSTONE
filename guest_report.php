@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SPAC – Report Unreceived Assistance</title>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
     <style>
         :root {
             --white:      #ffffff;
@@ -137,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .success-screen h3 { color: var(--green); font-size: 18px; font-weight: 500; margin-bottom: 8px; }
         .success-screen p { color: var(--muted); font-size: 13px; margin-bottom: 24px; line-height: 1.6; }
     </style>
-</head>
+<link rel="stylesheet" href="/SPAC/assets/fonts/fonts.css"></head>
 <body>
 <div class="wrapper">
 

@@ -283,7 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Import Residents — SPAC</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <?php include __DIR__.'/shared_style.css.php'; ?>
 <style>
 .page-header { margin-bottom:28px; }
@@ -381,7 +381,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 .preview-table tr:last-child td { border-bottom:none; }
 .preview-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:8px; margin-bottom:20px; }
 </style>
-</head>
+<link rel="stylesheet" href="/SPAC/assets/fonts/fonts.css"></head>
 <body>
 <?php include 'shared_sidebar.php'; ?>
 

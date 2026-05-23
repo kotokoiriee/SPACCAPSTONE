@@ -1,4 +1,4 @@
-﻿<div class="sidebar">
+<div class="sidebar">
 <div class="sidebar-logo">
     <div style="display:flex;align-items:center;justify-content:space-between">
         <div>

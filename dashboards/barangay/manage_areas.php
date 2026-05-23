@@ -107,7 +107,7 @@ $total_zones = count($areas);
 .bzone{background:#eff6ff;color:#1d4ed8}.bcmpd{background:#fef3c7;color:#92400e}.barea{background:#f0fdf4;color:#166534}.bother{background:#f1f5f9;color:#475569}
 </style>
 
-</head>
+<link rel="stylesheet" href="/SPAC/assets/fonts/fonts.css"></head>
 <body>
 <?php $brgy_info = $brgy; ?>
 <?php include 'shared_sidebar.php'; ?>

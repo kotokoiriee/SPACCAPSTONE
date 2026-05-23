@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // -- Import Residents Logic --
 function ir_normalize_date($val) {
     if (empty($val)) return null;

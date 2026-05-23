@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 $bid = $_SESSION['barangay_id'] ?? 1;
 $conn = new mysqli('localhost','root','','spac_db');

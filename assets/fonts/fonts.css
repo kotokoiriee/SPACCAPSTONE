@@ -1,0 +1,155 @@
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'Sora';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'Sora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'Sora';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'Sora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+@font-face {
+  font-family: 'Sora';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url(
+    $result = "/SPAC/assets/fonts/font$i.ttf"
+    $i++
+    $result
+) format('truetype');
+}
+
