@@ -686,7 +686,136 @@ if ($r) $admin_info = $r->fetch_assoc();
         #modal-allbrgy .modal-body, #modal-user-accounts .modal-body { min-height: 480px; }
         #brgy-list-container { max-height: 380px; overflow-y: auto; }
         #user-accounts-list  { max-height: 360px; overflow-y: auto; }
-    </style>
+    /*
+ * ══════════════════════════════════════════════════════════════
+ *  NAVBAR THEME PATCH — matches your login page (#0d1b3e navy)
+ *  Paste this INSIDE your <style> block, AFTER all existing CSS.
+ *  It overrides only the sidebar + topbar. Nothing else changes.
+ * ══════════════════════════════════════════════════════════════
+ */
+
+/* ── NEW CSS VARS (add these to :root too, or just leave here) ── */
+:root {
+    --nav-bg:     #0d1b3e;
+    --nav-text:   #c8d6f0;
+    --nav-muted:  #6e89b8;
+    --nav-border: rgba(255, 255, 255, 0.08);
+    --nav-hover:  rgba(255, 255, 255, 0.07);
+    --nav-accent: #3b82f6;
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+    background:   var(--nav-bg) !important;
+    border-right: 1px solid var(--nav-border) !important;
+}
+
+.sidebar-logo {
+    border-bottom: 1px solid var(--nav-border) !important;
+}
+.sidebar-logo h1 {
+    color: #ffffff !important;
+}
+.sidebar-logo p {
+    color: var(--nav-muted) !important;
+}
+
+/* Logo circle fallback letter */
+.sidebar-logo > div > div[style*="background:var(--navy)"] {
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* ── MENU SECTIONS ── */
+.menu-section {
+    color:   var(--nav-muted) !important;
+    opacity: 0.7;
+}
+
+/* ── MENU ITEMS ── */
+.menu-item {
+    color: var(--nav-text) !important;
+}
+.menu-item:hover {
+    color:      #ffffff !important;
+    background: var(--nav-hover) !important;
+}
+.menu-item.active {
+    color:      #ffffff !important;
+    background: rgba(59, 130, 246, 0.18) !important;
+}
+
+/* ── MENU DOTS ── */
+.menu-dot {
+    background: var(--nav-muted) !important;
+}
+.menu-item:hover .menu-dot {
+    background: #ffffff !important;
+}
+.menu-item.active .menu-dot {
+    background: var(--nav-accent) !important;
+}
+
+/* ── MENU BADGES ── */
+.menu-badge {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color:      var(--nav-text) !important;
+}
+.menu-badge.alert {
+    background: rgba(220, 38, 38, 0.25) !important;
+    color:      #fca5a5 !important;
+}
+
+/* ── SIDEBAR FOOTER ── */
+.sidebar-footer {
+    border-top: 1px solid var(--nav-border) !important;
+}
+.sidebar-footer a {
+    color: var(--nav-muted) !important;
+}
+.sidebar-footer a:hover {
+    color: #ffffff !important;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+    background:    var(--nav-bg) !important;
+    border-bottom: 1px solid var(--nav-border) !important;
+}
+.topbar-title {
+    color: #ffffff !important;
+}
+.topbar-date {
+    color: var(--nav-muted) !important;
+}
+
+/* live-indicator */
+#live-indicator {
+    color: var(--nav-muted) !important;
+}
+
+/* ── ROLE CHIP ── */
+.role-chip {
+    background:   rgba(255, 255, 255, 0.10) !important;
+    color:        #c8d6f0 !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* ── AVATAR BUTTON ── */
+.avatar-btn {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border:     1px solid rgba(255, 255, 255, 0.20) !important;
+}
+.avatar-btn:hover {
+    background: rgba(255, 255, 255, 0.22) !important;
+}
+
+/* ── USERNAME TEXT next to avatar ── */
+.topbar-right > div > div:first-child {
+    color: #ffffff !important;
+}
+
+</style>
 </head>
 <body>
 
@@ -1876,4 +2005,133 @@ fetchLiveStats();
 setInterval(fetchLiveStats, 10000);
 </script>
 </body>
-</html>
+</html>/*
+ * ══════════════════════════════════════════════════════════════
+ *  NAVBAR THEME PATCH — matches your login page (#0d1b3e navy)
+ *  Paste this INSIDE your <style> block, AFTER all existing CSS.
+ *  It overrides only the sidebar + topbar. Nothing else changes.
+ * ══════════════════════════════════════════════════════════════
+ */
+
+/* ── NEW CSS VARS (add these to :root too, or just leave here) ── */
+:root {
+    --nav-bg:     #0d1b3e;
+    --nav-text:   #c8d6f0;
+    --nav-muted:  #6e89b8;
+    --nav-border: rgba(255, 255, 255, 0.08);
+    --nav-hover:  rgba(255, 255, 255, 0.07);
+    --nav-accent: #3b82f6;
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+    background:   var(--nav-bg) !important;
+    border-right: 1px solid var(--nav-border) !important;
+}
+
+.sidebar-logo {
+    border-bottom: 1px solid var(--nav-border) !important;
+}
+.sidebar-logo h1 {
+    color: #ffffff !important;
+}
+.sidebar-logo p {
+    color: var(--nav-muted) !important;
+}
+
+/* Logo circle fallback letter */
+.sidebar-logo > div > div[style*="background:var(--navy)"] {
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* ── MENU SECTIONS ── */
+.menu-section {
+    color:   var(--nav-muted) !important;
+    opacity: 0.7;
+}
+
+/* ── MENU ITEMS ── */
+.menu-item {
+    color: var(--nav-text) !important;
+}
+.menu-item:hover {
+    color:      #ffffff !important;
+    background: var(--nav-hover) !important;
+}
+.menu-item.active {
+    color:      #ffffff !important;
+    background: rgba(59, 130, 246, 0.18) !important;
+}
+
+/* ── MENU DOTS ── */
+.menu-dot {
+    background: var(--nav-muted) !important;
+}
+.menu-item:hover .menu-dot {
+    background: #ffffff !important;
+}
+.menu-item.active .menu-dot {
+    background: var(--nav-accent) !important;
+}
+
+/* ── MENU BADGES ── */
+.menu-badge {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color:      var(--nav-text) !important;
+}
+.menu-badge.alert {
+    background: rgba(220, 38, 38, 0.25) !important;
+    color:      #fca5a5 !important;
+}
+
+/* ── SIDEBAR FOOTER ── */
+.sidebar-footer {
+    border-top: 1px solid var(--nav-border) !important;
+}
+.sidebar-footer a {
+    color: var(--nav-muted) !important;
+}
+.sidebar-footer a:hover {
+    color: #ffffff !important;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+    background:    var(--nav-bg) !important;
+    border-bottom: 1px solid var(--nav-border) !important;
+}
+.topbar-title {
+    color: #ffffff !important;
+}
+.topbar-date {
+    color: var(--nav-muted) !important;
+}
+
+/* live-indicator */
+#live-indicator {
+    color: var(--nav-muted) !important;
+}
+
+/* ── ROLE CHIP ── */
+.role-chip {
+    background:   rgba(255, 255, 255, 0.10) !important;
+    color:        #c8d6f0 !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* ── AVATAR BUTTON ── */
+.avatar-btn {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border:     1px solid rgba(255, 255, 255, 0.20) !important;
+}
+.avatar-btn:hover {
+    background: rgba(255, 255, 255, 0.22) !important;
+}
+
+/* ── USERNAME TEXT next to avatar ── */
+.topbar-right > div > div:first-child {
+    color: #ffffff !important;
+}
+
+
