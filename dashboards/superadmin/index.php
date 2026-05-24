@@ -324,36 +324,16 @@ if ($col && $col->num_rows > 0) {
 }
 if ($r) while ($row = $r->fetch_assoc()) $active_brgy_list[] = $row;
 
-$all_brgy_list = [];
-$r = $conn->query("
-    SELECT b.barangay_id, b.name,
-    COALESCE(b.status, 'active') as status,
-    COALESCE(b.district, '') as district,
-    COALESCE(b.email, '') as email,
-    COALESCE(b.contact_number, '') as contact_number,
-    COALESCE(b.address, '') as address,
-    COALESCE(b.captain_name, '') as captain_name,
-    COALESCE(b.captain_since, '') as captain_since,
-    COALESCE(b.land_area, '') as land_area,
-    COALESCE(b.founded_year, '') as founded_year,
-    COALESCE(b.is_pilot, 0) as is_pilot,
-    COUNT(DISTINCT r.resident_id) as total_residents,
-    COUNT(DISTINCT f.id) as total_families,
-    COUNT(DISTINCT r.resident_id) as population
-    FROM barangays b
-    LEFT JOIN residents r ON r.barangay_id = b.barangay_id AND r.is_active = 1
-    LEFT JOIN families  f ON f.barangay_id = b.barangay_id
-    GROUP BY b.barangay_id ORDER BY b.name");
-if (!$r) {
-    $r = $conn->query("SELECT barangay_id, name, COALESCE(status,'active') as status,
-                       COALESCE(district,'') as district, COALESCE(email,'') as email,
-                       COALESCE(contact_number,'') as contact_number,
-                       '' as address, '' as captain_name, '' as captain_since,
-                       0 as population, '' as land_area, '' as founded_year, 0 as is_pilot,
-                       0 as total_residents, 0 as total_families FROM barangays ORDER BY name");
-}
-if ($r) while ($row = $r->fetch_assoc()) $all_brgy_list[] = $row;
-
+$_brgy_tmp = [];
+$r = $conn->query("SELECT barangay_id, name, COALESCE(status,'active') as status, COALESCE(district,'') as district, COALESCE(email,'') as email, COALESCE(contact_number,'') as contact_number, COALESCE(address,'') as address, COALESCE(captain_name,'') as captain_name, COALESCE(captain_since,'') as captain_since, COALESCE(land_area,'') as land_area, COALESCE(founded_year,'') as founded_year, COALESCE(is_pilot,0) as is_pilot FROM barangays ORDER BY name");
+if ($r) while ($row = $r->fetch_assoc()) $_brgy_tmp[$row['barangay_id']] = $row;
+$r = $conn->query("SELECT barangay_id, COUNT(*) as cnt FROM residents WHERE is_active=1 GROUP BY barangay_id");
+if ($r) while ($row = $r->fetch_assoc()) { if (isset($_brgy_tmp[$row['barangay_id']])) $_brgy_tmp[$row['barangay_id']]['total_residents'] = $row['cnt']; }
+$r = $conn->query("SELECT barangay_id, COUNT(*) as cnt FROM families GROUP BY barangay_id");
+if ($r) while ($row = $r->fetch_assoc()) { if (isset($_brgy_tmp[$row['barangay_id']])) $_brgy_tmp[$row['barangay_id']]['total_families'] = $row['cnt']; }
+foreach ($_brgy_tmp as &$_b) { $_b['total_residents'] = $_b['total_residents'] ?? 0; $_b['total_families'] = $_b['total_families'] ?? 0; $_b['population'] = $_b['total_residents']; }
+unset($_b);
+$all_brgy_list = array_values($_brgy_tmp);
 $ongoing_ayuda_list = [];
 $has_status = $conn->query("SHOW COLUMNS FROM ayuda_records LIKE 'status'")->num_rows > 0;
 $where = $has_status ? "WHERE ar.status = 'ongoing'" : "";
@@ -388,15 +368,18 @@ $r = $conn->query("SELECT barangay_id, name FROM barangays ORDER BY name");
 if ($r) while ($row = $r->fetch_assoc()) $all_barangays[] = $row;
 
 $report_barangays = [];
-$r = $conn->query("SELECT b.name, COUNT(DISTINCT r.resident_id) as total_residents,
-                   COUNT(DISTINCT f.id) as total_families, COUNT(DISTINCT s.id) as total_scans,
-                   COUNT(DISTINCT ar.record_id) as total_ayuda FROM barangays b
-                   LEFT JOIN residents r ON r.barangay_id = b.barangay_id
-                   LEFT JOIN families f ON f.barangay_id = b.barangay_id
-                   LEFT JOIN scans s ON s.barangay_id = b.barangay_id
-                   LEFT JOIN ayuda_records ar ON ar.barangay_id = b.barangay_id
-                   GROUP BY b.barangay_id, b.name ORDER BY b.name");
-if ($r) while ($row = $r->fetch_assoc()) $report_barangays[] = $row;
+$_rpt_tmp = [];
+$r = $conn->query("SELECT barangay_id, name FROM barangays ORDER BY name");
+if ($r) while ($row = $r->fetch_assoc()) $_rpt_tmp[$row['barangay_id']] = ['name'=>$row['name'], 'total_residents'=>0, 'total_families'=>0, 'total_scans'=>0, 'total_ayuda'=>0];
+$r = $conn->query("SELECT barangay_id, COUNT(*) as c FROM residents GROUP BY barangay_id");
+if ($r) while ($row = $r->fetch_assoc()) { if (isset($_rpt_tmp[$row['barangay_id']])) $_rpt_tmp[$row['barangay_id']]['total_residents'] = $row['c']; }
+$r = $conn->query("SELECT barangay_id, COUNT(*) as c FROM families GROUP BY barangay_id");
+if ($r) while ($row = $r->fetch_assoc()) { if (isset($_rpt_tmp[$row['barangay_id']])) $_rpt_tmp[$row['barangay_id']]['total_families'] = $row['c']; }
+$r = $conn->query("SELECT barangay_id, COUNT(*) as c FROM scans GROUP BY barangay_id");
+if ($r) while ($row = $r->fetch_assoc()) { if (isset($_rpt_tmp[$row['barangay_id']])) $_rpt_tmp[$row['barangay_id']]['total_scans'] = $row['c']; }
+$r = $conn->query("SELECT barangay_id, COUNT(*) as c FROM ayuda_records GROUP BY barangay_id");
+if ($r) while ($row = $r->fetch_assoc()) { if (isset($_rpt_tmp[$row['barangay_id']])) $_rpt_tmp[$row['barangay_id']]['total_ayuda'] = $row['c']; }
+$report_barangays = array_values($_rpt_tmp);
 
 $users_all = [];
 $r = $conn->query("SELECT u.user_id, u.full_name, u.email, u.role, u.is_active, u.created_at,
@@ -686,136 +669,7 @@ if ($r) $admin_info = $r->fetch_assoc();
         #modal-allbrgy .modal-body, #modal-user-accounts .modal-body { min-height: 480px; }
         #brgy-list-container { max-height: 380px; overflow-y: auto; }
         #user-accounts-list  { max-height: 360px; overflow-y: auto; }
-    /*
- * ══════════════════════════════════════════════════════════════
- *  NAVBAR THEME PATCH — matches your login page (#0d1b3e navy)
- *  Paste this INSIDE your <style> block, AFTER all existing CSS.
- *  It overrides only the sidebar + topbar. Nothing else changes.
- * ══════════════════════════════════════════════════════════════
- */
-
-/* ── NEW CSS VARS (add these to :root too, or just leave here) ── */
-:root {
-    --nav-bg:     #0d1b3e;
-    --nav-text:   #c8d6f0;
-    --nav-muted:  #6e89b8;
-    --nav-border: rgba(255, 255, 255, 0.08);
-    --nav-hover:  rgba(255, 255, 255, 0.07);
-    --nav-accent: #3b82f6;
-}
-
-/* ── SIDEBAR ── */
-.sidebar {
-    background:   var(--nav-bg) !important;
-    border-right: 1px solid var(--nav-border) !important;
-}
-
-.sidebar-logo {
-    border-bottom: 1px solid var(--nav-border) !important;
-}
-.sidebar-logo h1 {
-    color: #ffffff !important;
-}
-.sidebar-logo p {
-    color: var(--nav-muted) !important;
-}
-
-/* Logo circle fallback letter */
-.sidebar-logo > div > div[style*="background:var(--navy)"] {
-    background: rgba(255, 255, 255, 0.12) !important;
-    border-color: rgba(255, 255, 255, 0.15) !important;
-}
-
-/* ── MENU SECTIONS ── */
-.menu-section {
-    color:   var(--nav-muted) !important;
-    opacity: 0.7;
-}
-
-/* ── MENU ITEMS ── */
-.menu-item {
-    color: var(--nav-text) !important;
-}
-.menu-item:hover {
-    color:      #ffffff !important;
-    background: var(--nav-hover) !important;
-}
-.menu-item.active {
-    color:      #ffffff !important;
-    background: rgba(59, 130, 246, 0.18) !important;
-}
-
-/* ── MENU DOTS ── */
-.menu-dot {
-    background: var(--nav-muted) !important;
-}
-.menu-item:hover .menu-dot {
-    background: #ffffff !important;
-}
-.menu-item.active .menu-dot {
-    background: var(--nav-accent) !important;
-}
-
-/* ── MENU BADGES ── */
-.menu-badge {
-    background: rgba(255, 255, 255, 0.1) !important;
-    color:      var(--nav-text) !important;
-}
-.menu-badge.alert {
-    background: rgba(220, 38, 38, 0.25) !important;
-    color:      #fca5a5 !important;
-}
-
-/* ── SIDEBAR FOOTER ── */
-.sidebar-footer {
-    border-top: 1px solid var(--nav-border) !important;
-}
-.sidebar-footer a {
-    color: var(--nav-muted) !important;
-}
-.sidebar-footer a:hover {
-    color: #ffffff !important;
-}
-
-/* ── TOPBAR ── */
-.topbar {
-    background:    var(--nav-bg) !important;
-    border-bottom: 1px solid var(--nav-border) !important;
-}
-.topbar-title {
-    color: #ffffff !important;
-}
-.topbar-date {
-    color: var(--nav-muted) !important;
-}
-
-/* live-indicator */
-#live-indicator {
-    color: var(--nav-muted) !important;
-}
-
-/* ── ROLE CHIP ── */
-.role-chip {
-    background:   rgba(255, 255, 255, 0.10) !important;
-    color:        #c8d6f0 !important;
-    border-color: rgba(255, 255, 255, 0.15) !important;
-}
-
-/* ── AVATAR BUTTON ── */
-.avatar-btn {
-    background: rgba(255, 255, 255, 0.15) !important;
-    border:     1px solid rgba(255, 255, 255, 0.20) !important;
-}
-.avatar-btn:hover {
-    background: rgba(255, 255, 255, 0.22) !important;
-}
-
-/* ── USERNAME TEXT next to avatar ── */
-.topbar-right > div > div:first-child {
-    color: #ffffff !important;
-}
-
-</style>
+    </style>
 </head>
 <body>
 
@@ -1883,8 +1737,8 @@ function refreshOnlineStatus() {
             });
         }).catch(function(){});
 }
-refreshOnlineStatus();
-setInterval(refreshOnlineStatus, 15000);
+setTimeout(refreshOnlineStatus, 5000);
+setInterval(refreshOnlineStatus, 300000);
 
 <?php if ($action_message && $action_type === 'error'): ?>
 <?php if (isset($_POST['action']) && $_POST['action'] === 'add_barangay'): ?>
@@ -2001,137 +1855,8 @@ function refreshBrgyTable(tableId, rows, countKey) {
         tbody.appendChild(tr);
     });
 }
-fetchLiveStats();
-setInterval(fetchLiveStats, 10000);
+setTimeout(fetchLiveStats, 5000);
+setInterval(fetchLiveStats, 300000);
 </script>
 </body>
-</html>/*
- * ══════════════════════════════════════════════════════════════
- *  NAVBAR THEME PATCH — matches your login page (#0d1b3e navy)
- *  Paste this INSIDE your <style> block, AFTER all existing CSS.
- *  It overrides only the sidebar + topbar. Nothing else changes.
- * ══════════════════════════════════════════════════════════════
- */
-
-/* ── NEW CSS VARS (add these to :root too, or just leave here) ── */
-:root {
-    --nav-bg:     #0d1b3e;
-    --nav-text:   #c8d6f0;
-    --nav-muted:  #6e89b8;
-    --nav-border: rgba(255, 255, 255, 0.08);
-    --nav-hover:  rgba(255, 255, 255, 0.07);
-    --nav-accent: #3b82f6;
-}
-
-/* ── SIDEBAR ── */
-.sidebar {
-    background:   var(--nav-bg) !important;
-    border-right: 1px solid var(--nav-border) !important;
-}
-
-.sidebar-logo {
-    border-bottom: 1px solid var(--nav-border) !important;
-}
-.sidebar-logo h1 {
-    color: #ffffff !important;
-}
-.sidebar-logo p {
-    color: var(--nav-muted) !important;
-}
-
-/* Logo circle fallback letter */
-.sidebar-logo > div > div[style*="background:var(--navy)"] {
-    background: rgba(255, 255, 255, 0.12) !important;
-    border-color: rgba(255, 255, 255, 0.15) !important;
-}
-
-/* ── MENU SECTIONS ── */
-.menu-section {
-    color:   var(--nav-muted) !important;
-    opacity: 0.7;
-}
-
-/* ── MENU ITEMS ── */
-.menu-item {
-    color: var(--nav-text) !important;
-}
-.menu-item:hover {
-    color:      #ffffff !important;
-    background: var(--nav-hover) !important;
-}
-.menu-item.active {
-    color:      #ffffff !important;
-    background: rgba(59, 130, 246, 0.18) !important;
-}
-
-/* ── MENU DOTS ── */
-.menu-dot {
-    background: var(--nav-muted) !important;
-}
-.menu-item:hover .menu-dot {
-    background: #ffffff !important;
-}
-.menu-item.active .menu-dot {
-    background: var(--nav-accent) !important;
-}
-
-/* ── MENU BADGES ── */
-.menu-badge {
-    background: rgba(255, 255, 255, 0.1) !important;
-    color:      var(--nav-text) !important;
-}
-.menu-badge.alert {
-    background: rgba(220, 38, 38, 0.25) !important;
-    color:      #fca5a5 !important;
-}
-
-/* ── SIDEBAR FOOTER ── */
-.sidebar-footer {
-    border-top: 1px solid var(--nav-border) !important;
-}
-.sidebar-footer a {
-    color: var(--nav-muted) !important;
-}
-.sidebar-footer a:hover {
-    color: #ffffff !important;
-}
-
-/* ── TOPBAR ── */
-.topbar {
-    background:    var(--nav-bg) !important;
-    border-bottom: 1px solid var(--nav-border) !important;
-}
-.topbar-title {
-    color: #ffffff !important;
-}
-.topbar-date {
-    color: var(--nav-muted) !important;
-}
-
-/* live-indicator */
-#live-indicator {
-    color: var(--nav-muted) !important;
-}
-
-/* ── ROLE CHIP ── */
-.role-chip {
-    background:   rgba(255, 255, 255, 0.10) !important;
-    color:        #c8d6f0 !important;
-    border-color: rgba(255, 255, 255, 0.15) !important;
-}
-
-/* ── AVATAR BUTTON ── */
-.avatar-btn {
-    background: rgba(255, 255, 255, 0.15) !important;
-    border:     1px solid rgba(255, 255, 255, 0.20) !important;
-}
-.avatar-btn:hover {
-    background: rgba(255, 255, 255, 0.22) !important;
-}
-
-/* ── USERNAME TEXT next to avatar ── */
-.topbar-right > div > div:first-child {
-    color: #ffffff !important;
-}
-
-
+</html>

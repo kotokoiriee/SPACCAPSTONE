@@ -1,0 +1,1 @@
+<?php require_once __DIR__ . "/vendor/autoload.php"; $dotenv = Dotenv\Dotenv::createImmutable(__DIR__); $dotenv->load(); require_once "config/db.php"; $conn->query("CREATE TABLE IF NOT EXISTS php_sessions (session_id VARCHAR(128) NOT NULL PRIMARY KEY, session_data TEXT NOT NULL, session_expiry INT(11) NOT NULL)"); echo "Session table created!"; ?>
