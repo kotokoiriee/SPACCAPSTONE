@@ -11,3 +11,8 @@ debug.php
 
 # Temp files
 *.tmp
+
+vendor/
+fix_*.py
+check_*.py
+fix_*.ps1
