@@ -1,2 +1,13 @@
 .env
-vendor/
+vendor/# Session files
+sessions/
+sess_*
+
+# Test/debug files
+session_test.php
+create_session_table.php
+dashboards/superadmin/add_indexes.php
+debug.php
+
+# Temp files
+*.tmp
